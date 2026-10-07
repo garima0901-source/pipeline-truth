@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline Truth: free forecast health check for Salesforce</title>
+<meta name="description" content="Drop in a Salesforce opportunities export and see how much of your pipeline sits on stale or missing data. Runs entirely in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317181c'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23f7f6f2' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav">
+    <a class="brand" href="./"><span class="brand-mark"><span></span></span>Pipeline Truth</a>
+    <div class="nav-links">
+      <a href="./" aria-current="page">Health check</a>
+      <a href="build.html">How I built this</a>
+      <a href="build.html#method">How the score works</a>
+    </div>
+  </nav>
+
+  <header class="hero" id="intro">
+    <div class="eyebrow">Free tool for RevOps &amp; sales leaders</div>
+    <h1>How much of your forecast rests on stale data?</h1>
+    <p class="lede">Drop in a Salesforce opportunities export. In a few seconds you'll see which open deals have past-due close dates, no next step, or no recent activity, how much pipeline value that puts at risk, and who to talk to first.</p>
+    <div class="cta-row">
+      <label class="btn primary" for="file-input">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>
+        Upload CSV export
+      </label>
+      <input id="file-input" class="sr-only" type="file" accept=".csv,text/csv">
+      <button class="btn" id="demo-btn" type="button">Try it with demo data</button>
+    </div>
+    <p class="privacy">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      <span>Your file is read by your browser and never uploaded. There is no server-side storage and no analytics. The optional AI summary sends only aggregated numbers, with rep names replaced by labels, and only when you click it.</span>
+    </p>
+
+    <div class="drop" id="drop">
+      <strong>Or drop a .csv file here</strong>
+      <p>Works best with an Opportunities report exported as "Details Only". Column names are matched automatically, and you can fix the mapping afterwards.</p>
+    </div>
+
+    <details class="howto">
+      <summary>How to export the right report from Salesforce (2 minutes)</summary>
+      <ol>
+        <li>In Salesforce, open <b>Reports → New Report</b> and choose the <b>Opportunities</b> report type.</li>
+        <li>Set the filters to <b>All opportunities</b> (or your team), and a date range that covers your open pipeline.</li>
+        <li class="chips-inline">Add these columns where you have them: <code>Opportunity Owner</code>, <code>Opportunity Name</code>, <code>Account Name</code>, <code>Stage</code>, <code>Amount</code>, <code>Close Date</code>, <code>Created Date</code>, <code>Next Step</code>, <code>Last Activity</code>, <code>Forecast Category</code>, <code>Probability (%)</code>, <code>Stage Duration</code>. Only Stage, Amount and Close Date are required. Each extra column turns on another check.</li>
+        <li>Save, then choose <b>Export → Details Only → Comma Delimited .csv</b>.</li>
+        <li>Drop the file here. If you'd rather not use real data, the demo button loads a synthetic pipeline in the same format.</li>
+      </ol>
+    </details>
+
+    <div class="facts">
+      <div class="fact">
+        <b>45%</b>
+        <p>of sales leaders and sellers have high confidence in their organisation's forecast accuracy.</p>
+        <cite>Gartner, State of Sales Operations survey, press release, 12 Feb 2020 · <a href="https://www.gartner.com/en/newsroom/press-releases/2020-02-12-gartner-says-less-than-50--of-sales-leaders-and-selle" target="_blank" rel="noopener">source</a></cite>
+      </div>
+      <div class="fact">
+        <b>47%</b>
+        <p>of respondents in the same survey believed their organisation had high-quality data. Gartner names poor data quality as a main contributor to inaccurate forecasts.</p>
+        <cite>Gartner, same release · <a href="https://www.gartner.com/en/newsroom/press-releases/2020-02-12-gartner-says-less-than-50--of-sales-leaders-and-selle" target="_blank" rel="noopener">source</a></cite>
+      </div>
+      <div class="fact">
+        <b>60%</b>
+        <p>of reps' time goes to non-selling tasks such as admin and data entry.</p>
+        <cite>Salesforce, State of Sales (2026) statistics · <a href="https://www.salesforce.com/sales/state-of-sales/sales-statistics/" target="_blank" rel="noopener">source</a></cite>
+      </div>
+    </div>
+  </header>
+
+  <!-- Step 2: mapping + settings -->
+  <section class="section hidden" id="setup">
+    <div class="panel-head">
+      <div>
+        <h2>Check the setup</h2>
+        <div class="muted small" id="file-meta"></div>
+      </div>
+      <button class="btn small" id="reset-btn" type="button">Start over</button>
+    </div>
+    <div id="setup-notices"></div>
+    <div class="setup">
+      <div class="panel">
+        <h3>Column mapping</h3>
+        <p class="muted small">Matched automatically from your column names. A check runs only when its column is mapped.</p>
+        <table class="map-table" id="map-table"></table>
+      </div>
+      <div class="panel">
+        <h3>Rules</h3>
+        <label class="field"><span>Measure as of</span><input type="date" id="as-of"></label>
+        <div class="grid-2">
+          <label class="field"><span>No activity for more than (days)</span><input type="number" id="stale-days" min="1" max="365" value="30"></label>
+          <label class="field"><span>Stuck in one stage for more than (days)</span><input type="number" id="stuck-days" min="1" max="730" value="45"></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Date format in file</span>
+            <select id="date-fmt"><option value="auto">Detect automatically</option><option value="mdy">MM/DD/YYYY</option><option value="dmy">DD/MM/YYYY</option><option value="ymd">YYYY-MM-DD</option></select>
+          </label>
+          <label class="field"><span>Currency symbol</span>
+            <select id="currency"><option value="$">$</option><option value="€">€</option><option value="£">£</option><option value="₹">₹</option><option value="">None</option></select>
+          </label>
+        </div>
+        <div class="field"><span class="small muted">Stages that count as closed (excluded from open pipeline). Click to toggle.</span>
+          <div class="stage-chips" id="stage-chips" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 3: results -->
+  <section class="section hidden" id="results" aria-live="polite">
+    <div class="panel-head">
+      <div>
+        <h2>Your pipeline health</h2>
+        <div class="muted small" id="results-meta"></div>
+      </div>
+      <span class="demo-flag hidden" id="demo-flag">● Synthetic demo data</span>
+    </div>
+
+    <div class="score-row">
+      <div class="panel score-card">
+        <div class="gauge">
+          <svg viewBox="0 0 120 120" width="190" height="190" aria-hidden="true">
+            <circle cx="60" cy="60" r="52" fill="none" stroke="var(--surface-2)" stroke-width="12"/>
+            <circle id="gauge-arc" cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="12" stroke-linecap="round" stroke-dasharray="0 999"/>
+          </svg>
+          <div class="num"><div><span id="score-num">–</span><small>of 100</small></div></div>
+        </div>
+        <div class="grade" id="grade"></div>
+        <p class="small muted" style="margin:10px 0 0;max-width:30ch">Share of open pipeline <b>value</b> on deals with no data issue. <a href="build.html#method">How it's calculated</a></p>
+      </div>
+      <div class="panel">
+        <div class="kpis" id="kpis"></div>
+        <div id="coverage" class="small muted" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-head"><h3>Where the data breaks down</h3><span class="small muted">Open pipeline value affected by each issue</span></div>
+      <div class="bars" id="issue-bars"></div>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="panel">
+        <div class="panel-head"><h3>How overdue are past-due close dates?</h3></div>
+        <div class="bars" id="overdue-bars"></div>
+        <p class="small muted" id="overdue-note" style="margin:12px 0 0"></p>
+      </div>
+      <div class="panel" id="forecast-panel">
+        <div class="panel-head"><h3>Forecast exposure</h3></div>
+        <div id="forecast-body"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-head"><h3>By stage</h3><span class="small muted">Where deals stall and where data goes missing</span></div>
+      <div class="table-wrap"><table class="data" id="stage-table"></table></div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-head"><h3>By owner</h3><span class="small muted">Who to start the pipeline review with</span></div>
+      <div class="table-wrap"><table class="data" id="owner-table"></table></div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-head">
+        <h3>Fix list: largest flagged deals first</h3>
+        <button class="btn small" id="download-btn" type="button">Download full fix list (.csv)</button>
+      </div>
+      <div class="table-wrap"><table class="data" id="fix-table"></table></div>
+      <p class="small muted" id="fix-note" style="margin:10px 0 0"></p>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-head">
+        <h3>One-paragraph brief for your CRO (optional, AI)</h3>
+        <button class="btn small primary" id="ai-btn" type="button">Write the brief</button>
+      </div>
+      <p class="small muted" style="margin-top:0">This is the only feature that sends anything off your machine. It sends the aggregated numbers shown above. Rep names are replaced with labels (Rep A, Rep B…) and swapped back in your browser. No deal names, accounts or rows are sent.</p>
+      <div class="ai-box" id="ai-out"></div>
+      <details class="payload"><summary>See exactly what would be sent</summary><pre id="ai-payload"></pre></details>
+    </div>
+  </section>
+
+  <footer>
+    <p><b>Pipeline Truth</b> is an independent project by Garima. It is not affiliated with or endorsed by Salesforce or any CRM vendor. Salesforce is a trademark of Salesforce, Inc.</p>
+    <p>The checks are simple, transparent rules (<a href="build.html#method">see the method</a>), not a prediction of whether any deal will close. Source code: <a href="https://github.com/garima0901-source/pipeline-truth" target="_blank" rel="noopener">GitHub</a>.</p>
+  </footer>
+</div>
+
+<script src="assets/papaparse.min.js"></script>
+<script src="assets/demo.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

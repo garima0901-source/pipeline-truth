@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How I built Pipeline Truth</title>
+<meta name="description" content="The product thinking behind Pipeline Truth: problem, users, spec, AI decisions, metrics and method.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317181c'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23f7f6f2' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav">
+    <a class="brand" href="./"><span class="brand-mark"><span></span></span>Pipeline Truth</a>
+    <div class="nav-links">
+      <a href="./">Health check</a>
+      <a href="build.html" aria-current="page">How I built this</a>
+      <a href="#method">How the score works</a>
+    </div>
+  </nav>
+</div>
+
+<main class="wrap narrow article">
+  <header class="hero">
+    <div class="eyebrow">Product notes · v0.1 · 7 October 2026</div>
+    <h1>How I built Pipeline Truth</h1>
+    <p class="lede">The problem, who it's for, the spec, where AI helps and where it doesn't, and how I'd know if it's working. I wrote this the way I'd write it for an engineering and design team.</p>
+    <div class="toc">
+      <a href="#problem">Problem</a><a href="#users">Users</a><a href="#discovery">Discovery</a><a href="#spec">Spec</a>
+      <a href="#ai">AI decisions</a><a href="#metrics">Metrics</a><a href="#method">Method</a><a href="#next">What's next</a><a href="#sources">Sources</a>
+    </div>
+  </header>
+
+  <h2 id="problem">1. The problem</h2>
+  <p>A sales forecast is only as good as the CRM data under it. Most teams already suspect theirs isn't good:</p>
+  <ul>
+    <li>In Gartner's State of Sales Operations survey, only <b>45%</b> of sales leaders and sellers had high confidence in their organisation's forecast accuracy, and only <b>47%</b> believed their organisation had high-quality data. Gartner names poor data quality as one of the main contributors to inaccurate forecasts, and notes that many organisations don't measure data quality at all.</li>
+    <li>Salesforce's State of Sales research puts the share of reps' time spent on non-selling tasks at <b>60%</b>. Asking reps to type more into the CRM competes directly with selling.</li>
+  </ul>
+  <p>So the gap I went after is the one Gartner points to: <b>teams don't measure their pipeline data quality</b>. A RevOps lead can feel that the forecast is shaky. What they usually can't do in five minutes is put a number on it, show it in money, and point to the deals and owners behind it.</p>
+  <p><b>Problem statement:</b> RevOps and sales leaders have no fast, trustworthy way to see how much of their open pipeline sits on stale or missing data before a forecast call.</p>
+
+  <h2 id="users">2. Who it's for</h2>
+  <p>These are my working hypotheses. Discovery conversations are meant to confirm or kill them.</p>
+  <table class="plain">
+    <thead><tr><th>User</th><th>Job to be done</th><th>What they need from the tool</th></tr></thead>
+    <tbody>
+      <tr><td><b>RevOps / Sales Ops lead</b><br><span class="muted small">Primary user</span></td><td>"Before Monday's forecast call, show me where the data is lying to us."</td><td>A score they can track week to week, the specific deals to fix, and something to send to managers.</td></tr>
+      <tr><td><b>Front-line sales manager</b></td><td>"Tell me which of my reps' deals to inspect in 1:1s."</td><td>An owner view and a fix list sorted by money at risk.</td></tr>
+      <tr><td><b>CRO / VP Sales</b></td><td>"How much of the commit should I believe?"</td><td>One number for commit exposure and a short written brief.</td></tr>
+    </tbody>
+  </table>
+  <p><b>Main adoption barrier:</b> trust and privacy. Nobody uploads a real pipeline to a stranger's server. That drove the most important design decision: <b>everything runs in the browser</b>.</p>
+
+  <h2 id="discovery">3. Discovery</h2>
+  <p>v0.1 is built from public research and how Salesforce reports are structured. The next step is talking to the people who'd use it. I'm running short conversations with RevOps practitioners and will publish what changes as a result. Findings will be added here only from real conversations, with permission, and anonymised.</p>
+  <div class="story">
+    <h3>Interview guide (20 minutes)</h3>
+    <ul>
+      <li>Walk me through the last time you prepared for a forecast call. Where did the numbers come from?</li>
+      <li>When did you last find a deal in the forecast that was clearly stale? How did you find it?</li>
+      <li>What do you check first when you don't trust a rep's pipeline?</li>
+      <li>Which CRM fields do your reps reliably keep up to date, and which ones never?</li>
+      <li>Have you tried to measure data quality before? What happened?</li>
+      <li>[Show the tool] What would you do with this result tomorrow morning? What's missing or wrong?</li>
+    </ul>
+  </div>
+  <p class="small muted">What I want to learn: (1) which checks matter most, (2) whether value-weighted or count-based scoring is more useful, (3) whether teams would rerun this weekly, and what would make them.</p>
+
+  <h2 id="spec">4. Spec for v0.1</h2>
+  <p><b>Goal:</b> In under two minutes, a RevOps lead goes from a Salesforce export to a money-weighted view of pipeline data quality and a list of deals to fix.</p>
+  <p><b>Out of scope for v0.1:</b> connecting directly to Salesforce (OAuth); predicting win probability; storing results; HubSpot and other CRMs (the column mapping works, but I haven't tested their exports).</p>
+
+  <div class="card-list">
+    <div class="story">
+      <h3>Story 1: Get a result from my own export</h3>
+      <p>As a RevOps lead, I want to drop in my Opportunities export and get a result without setup, so that I can try it before a meeting.</p>
+      <ul>
+        <li>Given a CSV with Stage, Amount and Close Date columns under standard Salesforce labels, when I drop it in, results render with no manual mapping.</li>
+        <li>Given non-standard column names, I can map any field from a dropdown and results update immediately.</li>
+        <li>Given dates where every value fits both MM/DD and DD/MM, a warning says which format was assumed and how to change it.</li>
+        <li>No request containing file contents leaves the browser.</li>
+      </ul>
+    </div>
+    <div class="story">
+      <h3>Story 2: See the risk in money, not just counts</h3>
+      <p>As a CRO, I want to see how much pipeline value sits on deals with data issues, so that I know how much of the forecast to discount.</p>
+      <ul>
+        <li>The score is the share of open pipeline value on deals with no flagged issue, from 0 to 100.</li>
+        <li>Each issue shows the number of deals and the value affected.</li>
+        <li>If a Forecast Category column exists, Commit and Best Case exposure are shown separately. If not, the tool falls back to deals with probability ≥ 50%. If neither exists, it says which column to add.</li>
+        <li>Checks that can't run because a column is missing are listed as "not measured", never silently counted as passing.</li>
+      </ul>
+    </div>
+    <div class="story">
+      <h3>Story 3: Know who to talk to and what to fix</h3>
+      <p>As a sales manager, I want a fix list and an owner view, so that I can run focused pipeline reviews.</p>
+      <ul>
+        <li>The owner table is sorted by flagged value, largest first.</li>
+        <li>The fix list shows the 15 largest flagged deals, each with its issues and a suggested first fix. A CSV download includes all flagged deals.</li>
+      </ul>
+    </div>
+    <div class="story">
+      <h3>Story 4: Get a brief I can forward</h3>
+      <p>As a RevOps lead, I want a short written summary for my CRO, so that I don't have to write it from the charts.</p>
+      <ul>
+        <li>The brief is generated only when I click. Before that, I can see the exact JSON that would be sent.</li>
+        <li>The payload contains aggregates only. Rep names are replaced with labels and swapped back in the browser.</li>
+        <li>If the AI service is unavailable, the rest of the page keeps working and a clear message is shown.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 id="ai">5. AI decisions: where it adds value and where it's noise</h2>
+  <div class="decision">
+    <h3><span class="tag no">Not AI</span> The checks themselves</h3>
+    <p>Flagging a past close date or a missing next step is a rule, not a judgement. Rules are explainable, give the same answer every time, and can be argued with in a pipeline review. An AI score for "data quality" would be harder to trust and impossible to audit. The <a href="#method">method</a> is public so anyone can check it.</p>
+  </div>
+  <div class="decision">
+    <h3><span class="tag yes">AI</span> Turning numbers into a brief</h3>
+    <p>Charts take interpretation, and a CRO wants three sentences. Writing a short, specific narrative from structured numbers is where a language model is genuinely useful. The prompt restricts it to the numbers provided, rep labels only, and a fixed shape: headline, actions, biggest single fix.</p>
+  </div>
+  <div class="decision">
+    <h3><span class="tag yes">AI, with limits</span> Privacy by design</h3>
+    <p>The model never sees deal names, accounts or rows. Rep names are replaced before sending. The server also strips the payload down to small, plain values, so the endpoint can't be used as a general chatbot.</p>
+  </div>
+  <div class="decision">
+    <h3><span class="tag no">Rejected</span> AI win-probability per deal</h3>
+    <p>It's tempting, but without historical outcomes and activity data it would be guesswork presented as confidence. In other words, noise. It's worth doing only with outcome data, and it isn't the problem this tool solves.</p>
+  </div>
+  <div class="decision">
+    <h3><span class="tag later">Later</span> "Chat with your pipeline"</h3>
+    <p>Useful only once the underlying data is trustworthy, and it would need the raw rows sent to a model. That reverses the privacy promise that makes people willing to try the tool. It's parked until there's a clear user need and a private way to do it.</p>
+  </div>
+
+  <h2 id="metrics">6. How I'd know it's working</h2>
+  <p>The site deliberately has no analytics today. Here's what I'd instrument with privacy-friendly, count-only events (no file data) if this were a product:</p>
+  <table class="plain">
+    <thead><tr><th>Metric</th><th>Definition</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td><b>Activation</b></td><td>% of visitors who run a check on their own file, not just the demo</td><td>Shows the privacy promise and export guide are enough to get real data in.</td></tr>
+      <tr><td><b>Time to first result</b></td><td>Seconds from landing to results, for own-file runs</td><td>The goal is under two minutes, including the export.</td></tr>
+      <tr><td><b>Mapping friction</b></td><td>% of own-file runs where the user changed a column mapping</td><td>High means auto-mapping is failing for real exports.</td></tr>
+      <tr><td><b>Action taken</b></td><td>% of runs that download the fix list or generate a brief</td><td>Separates "interesting" from "useful".</td></tr>
+      <tr><td><b>Weekly return</b></td><td>% of users who run another check within 14 days</td><td>The real test: does this become part of the forecast routine?</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="method">7. Method: how the score works</h2>
+  <p>A deal is <b>open</b> if its stage isn't marked as closed. Stages containing "closed", "won", "lost" or "disqualified" are marked closed by default, and you can change this. Each open deal gets checked against the rules below, as of the date you choose:</p>
+  <table class="plain">
+    <thead><tr><th>Check</th><th>Flagged when</th><th>Needs column</th></tr></thead>
+    <tbody>
+      <tr><td>Close date already passed</td><td>Close Date is earlier than the as-of date</td><td>Close Date</td></tr>
+      <tr><td>No next step</td><td>Next Step is blank</td><td>Next Step</td></tr>
+      <tr><td>No recent activity</td><td>Last Activity is blank or older than N days (default 30)</td><td>Last Activity</td></tr>
+      <tr><td>Stuck in stage</td><td>Days in the current stage exceed N (default 45), taken from Stage Duration or calculated from Last Stage Change Date</td><td>Stage Duration or Last Stage Change Date</td></tr>
+      <tr><td>Amount missing</td><td>Amount is blank or zero</td><td>Amount</td></tr>
+    </tbody>
+  </table>
+  <p><b>Health score</b> = open pipeline value on deals with no flags ÷ total open pipeline value × 100. It's weighted by value because a stale $500k deal matters more to the forecast than a stale $5k one. Deals with no amount add nothing to the value, so they're also shown as a count. The bands (80+ healthy, 60–79 needs attention, below 60 at risk) are my own rule of thumb, not an industry benchmark.</p>
+  <p><b>Limits.</b> The checks measure data hygiene, not deal quality. A deal can pass every check and still be lost. The thresholds are defaults you should tune to your sales cycle. Checks whose columns are missing are reported as not measured, so the score can only be optimistic, never pessimistic, when columns are missing.</p>
+
+  <h2 id="next">8. What's next</h2>
+  <ul>
+    <li><b>Trend view:</b> compare two exports, for example this week and last week, so the score becomes a weekly habit rather than a one-off.</li>
+    <li><b>Test with real exports</b> from HubSpot and Pipedrive, then add their column names to auto-mapping.</li>
+    <li><b>Per-stage thresholds:</b> "stuck" should mean something different in Discovery than in Negotiation.</li>
+    <li><b>The bigger lesson:</b> every check here measures something a rep forgot to type. The lasting fix isn't better reminders. It's capturing activity, contacts and next steps automatically, at the source, so hygiene stops depending on memory. This tool shows the size of that gap. Closing it is a product of its own.</li>
+  </ul>
+
+  <h2>Changelog</h2>
+  <ul>
+    <li><b>v0.1 · 7 Oct 2026:</b> First release. Five checks, value-weighted score, stage, owner and forecast views, fix-list export, optional AI brief from aggregates only.</li>
+  </ul>
+
+  <h2 id="sources">Sources</h2>
+  <ol class="sources">
+    <li>Gartner, "Gartner Says Less Than 50% of Sales Leaders and Sellers Have High Confidence in Forecasting Accuracy", press release, 12 February 2020 (State of Sales Operations Survey). <a href="https://www.gartner.com/en/newsroom/press-releases/2020-02-12-gartner-says-less-than-50--of-sales-leaders-and-selle" target="_blank" rel="noopener">gartner.com</a></li>
+    <li>Salesforce, "Sales Statistics" from the State of Sales report (2026): "Sales reps spend 60% of their time on non-selling tasks." <a href="https://www.salesforce.com/sales/state-of-sales/sales-statistics/" target="_blank" rel="noopener">salesforce.com</a></li>
+  </ol>
+</main>
+
+<div class="wrap">
+  <footer>
+    <p><b>Pipeline Truth</b> is an independent project by Garima. It is not affiliated with or endorsed by Salesforce, Gartner or any CRM vendor. Salesforce is a trademark of Salesforce, Inc.</p>
+    <p>Source code: <a href="https://github.com/garima0901-source/pipeline-truth" target="_blank" rel="noopener">GitHub</a>.</p>
+  </footer>
+</div>
+</body>
+</html>
